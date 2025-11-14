@@ -134,11 +134,9 @@ class RetrievalManager:
 
     def split_text(self, text: str) -> List[str]:
         try:
+            from langchain_text_splitters import RecursiveCharacterTextSplitter
+        except ImportError:
             from langchain.text_splitter import RecursiveCharacterTextSplitter
-        except ImportError as exc:
-            raise ImportError(
-                "Install langchain to use RecursiveCharacterTextSplitter."
-            ) from exc
         splitter = RecursiveCharacterTextSplitter(
             chunk_size=self.config.chunk_size,
             chunk_overlap=self.config.chunk_overlap,
