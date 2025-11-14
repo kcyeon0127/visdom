@@ -1,0 +1,25 @@
+# Core utilities
+numpy
+pandas
+tqdm
+pillow
+
+# Torch & LLM stack
+torch
+transformers
+sentence-transformers
+qwen-vl-utils
+
+# PDF / OCR / vision
+pdf2image
+PyPDF2
+pytesseract
+
+# Retrieval + vector DB
+langchain
+chromadb
+rank-bm25
+colpali_engine
+
+# Optional: install only if ColQwen/ColPali vision indexing is needed
+# colpali_engine already pulls required models, but keep this line for clarity
