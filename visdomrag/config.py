@@ -25,8 +25,6 @@ class VisDoMRAGConfig:
     qa_prompt: str = DEFAULT_QA_PROMPT
     force_reindex: bool = False
     api_keys: Dict[str, Any] = field(default_factory=dict)
-    vision_device: str = "auto"  # "auto", "cuda", "mps", "cpu"
-    vision_torch_dtype: str | None = None  # e.g. "bfloat16", "float16", "float32"
 
     def __post_init__(self) -> None:
         self.data_dir = Path(self.data_dir)

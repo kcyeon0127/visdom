@@ -38,25 +38,13 @@ def init_qwen(
             "Install transformers and qwen-vl utilities to run Qwen2-VL inference."
         ) from exc
 
-    attn_impl = _resolve_attn_implementation(attn_implementation)
-    if attn_impl != attn_implementation:
-        logger.warning(
-            "FlashAttention2를 사용할 수 없어 '%s'로 대체합니다.", attn_impl
-        )
-
-    if device_map == "auto":
-        target_device = _default_device()
-        resolved_device_map = target_device
-    else:
-        target_device = device_map or _default_device()
-        resolved_device_map = device_map
-
-    logger.info("Loading Qwen model %s (attn=%s, device=%s)", model_name, attn_impl, resolved_device_map)
+    target_device = "cuda"
+    logger.info("Loading Qwen model %s", model_name)
     model = Qwen2VLForConditionalGeneration.from_pretrained(
         model_name,
         torch_dtype=torch_dtype,
-        attn_implementation=attn_impl,
-        device_map=resolved_device_map,
+        attn_implementation=attn_implementation,
+        device_map=device_map,
     )
     processor = AutoProcessor.from_pretrained(
         model_name,
@@ -70,32 +58,6 @@ def init_qwen(
         process_vision_info=process_vision_info,
         device=target_device,
     )
-
-
-def _resolve_attn_implementation(preference: str) -> str:
-    """FlashAttention 사용 여부를 자동으로 판별."""
-    pref = preference.lower()
-    if pref not in {"flash_attention_2", "eager", "sdpa"}:
-        raise ValueError(f"Unknown attn implementation: {preference}")
-    if pref != "flash_attention_2":
-        return pref
-    if not torch.cuda.is_available():
-        return "eager"
-    try:
-        import importlib
-
-        importlib.import_module("flash_attn")
-    except Exception:
-        return "eager"
-    return pref
-
-
-def _default_device() -> str:
-    if torch.cuda.is_available():
-        return "cuda"
-    if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
-        return "mps"
-    return "cpu"
 
 
 def _decode_generation(resources: QwenResources, inputs, generated_ids) -> str:

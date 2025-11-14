@@ -34,40 +34,11 @@ class RetrievalManager:
     st_embedding_function: Optional[object] = None
     text_model_name: Optional[str] = None
     device: str = field(init=False)
-    vision_device: str = field(init=False)
-    vision_dtype: torch.dtype = field(init=False)
 
     def __post_init__(self) -> None:
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        self.vision_device = self._resolve_vision_device()
-        self.vision_dtype = self._resolve_vision_dtype()
         self.config.ensure_directories()
         self._initialize_retrievers()
-
-    # ------------------------------------------------------------------
-    # 초기화 관련 유틸리티
-    # ------------------------------------------------------------------
-    def _resolve_vision_device(self) -> str:
-        preferred = self.config.vision_device.lower()
-        if preferred != "auto":
-            return preferred
-        if torch.cuda.is_available():
-            return "cuda"
-        if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
-            return "mps"
-        return "cpu"
-
-    def _resolve_vision_dtype(self) -> torch.dtype:
-        dtype_name = self.config.vision_torch_dtype
-        if dtype_name:
-            if not hasattr(torch, dtype_name):
-                raise ValueError(f"Unknown torch dtype: {dtype_name}")
-            return getattr(torch, dtype_name)
-        if self.vision_device == "cuda":
-            return torch.bfloat16
-        if self.vision_device == "mps":
-            return torch.float16
-        return torch.float32
 
     def _initialize_retrievers(self) -> None:
         cfg = self.config
@@ -83,25 +54,21 @@ class RetrievalManager:
             ) from exc
 
         if cfg.vision_retriever == "colpali":
-            logger.info(
-                "Loading ColPali model for visual indexing on %s", self.vision_device
-            )
+            logger.info("Loading ColPali model for visual indexing on CUDA")
             self.vision_model = ColPali.from_pretrained(
                 "vidore/colpali-v1.2",
-                torch_dtype=self.vision_dtype,
-                device_map=self.vision_device,
+                torch_dtype=torch.bfloat16,
+                device_map="cuda",
             ).eval()
             self.vision_processor = ColPaliProcessor.from_pretrained(
                 "vidore/colpali-v1.2"
             )
         else:
-            logger.info(
-                "Loading ColQwen model for visual indexing on %s", self.vision_device
-            )
+            logger.info("Loading ColQwen model for visual indexing on CUDA")
             self.vision_model = ColQwen2.from_pretrained(
                 "vidore/colqwen2-v0.1",
-                torch_dtype=self.vision_dtype,
-                device_map=self.vision_device,
+                torch_dtype=torch.bfloat16,
+                device_map="cuda",
             ).eval()
             self.vision_processor = ColQwen2Processor.from_pretrained(
                 "vidore/colqwen2-v0.1"
@@ -248,7 +215,7 @@ class RetrievalManager:
                 try:
                     processed_image = self.vision_processor.process_images([page_img])
                     processed_image = {
-                        k: v.to(self.vision_device)
+                        k: v.to(self.vision_model.device)
                         for k, v in processed_image.items()
                     }
                     with torch.no_grad():
@@ -269,7 +236,7 @@ class RetrievalManager:
             try:
                 processed_query = self.vision_processor.process_queries([question])
                 processed_query = {
-                    k: v.to(self.vision_device)
+                    k: v.to(self.vision_model.device)
                     for k, v in processed_query.items()
                 }
                 with torch.no_grad():
