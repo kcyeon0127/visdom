@@ -24,7 +24,7 @@ class QwenResources:
 def init_qwen(
     model_name: str = "Qwen/Qwen2-VL-7B-Instruct",
     torch_dtype: torch.dtype = torch.bfloat16,
-    attn_implementation: str = "flash_attention_2",
+    attn_implementation: str = "sdpa",  # flash_attention_2(A100/RTX30- 이상), eager(호환 최우선) 가능
     device_map: str | None = "auto",
     min_pixels: int = 256 * 28 * 28,
     max_pixels: int = 640 * 28 * 28,
