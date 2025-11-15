@@ -151,7 +151,8 @@ class RetrievalManager:
         pdf_dir = self.config.data_dir / "docs"
         unique_docs = self._collect_unique_docs()
 
-        for doc_id in tqdm(unique_docs, desc="Caching documents"):
+        desc = f"Caching documents ({self.config.data_dir.name})"
+        for doc_id in tqdm(unique_docs, desc=desc):
             candidates = [
                 pdf_dir / doc_id,
                 pdf_dir / f"{doc_id}.pdf",
@@ -196,7 +197,10 @@ class RetrievalManager:
 
         page_embeddings: Dict[str, torch.Tensor] = {}
 
-        for pdf_file in tqdm(pdf_files, desc="Processing PDFs for visual index"):
+        for pdf_file in tqdm(
+            pdf_files,
+            desc=f"Visual index PDFs ({self.config.data_dir.name})",
+        ):
             doc_id = Path(pdf_file).stem
             pdf_path = pdf_dir / pdf_file
             if not pdf_path.exists():
@@ -227,7 +231,8 @@ class RetrievalManager:
 
         query_embeddings: Dict[str, torch.Tensor] = {}
         for _, row in tqdm(
-            self.df.iterrows(), desc="Processing queries for visual index"
+            self.df.iterrows(),
+            desc=f"Visual index queries ({self.config.data_dir.name})",
         ):
             q_id = row['q_id']
             question = row['question']
@@ -246,7 +251,8 @@ class RetrievalManager:
 
         results: List[Dict[str, str | float]] = []
         for q_id, query_emb in tqdm(
-            query_embeddings.items(), desc="Ranking documents for queries"
+            query_embeddings.items(),
+            desc=f"Ranking documents ({self.config.data_dir.name})",
         ):
             relevant_docs = self._extract_relevant_docs(q_id)
             if not relevant_docs:
@@ -329,7 +335,8 @@ class RetrievalManager:
         chunk_to_doc: List[Dict[str, str | int]] = []
 
         for doc_id, pages in tqdm(
-            self.document_cache.items(), desc="Preparing documents for text index"
+            self.document_cache.items(),
+            desc=f"Text index docs ({self.config.data_dir.name})",
         ):
             text = "\n".join(pages)
             chunks = self.split_text(text)

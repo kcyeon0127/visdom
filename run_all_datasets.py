@@ -15,6 +15,9 @@ from pathlib import Path
 from statistics import mean
 from typing import Dict, List, Optional
 
+import argparse
+import os
+from tqdm import tqdm
 from visdomrag import (
     VisDoMRAGConfig,
     load_dataset,
@@ -76,43 +79,126 @@ def evaluate_json_dir(path: Path) -> Dict:
     }
 
 
-def run_for_dataset(name: str, data_dir: Path, output_root: Path, csv_path: Optional[Path]) -> Dict:
+def run_for_dataset(
+    name: str,
+    data_dir: Path,
+    output_root: Path,
+    csv_path: Optional[Path],
+    retriever: Optional[RetrievalManager] = None,
+    qwen=None,
+) -> Dict:
     logger.info("Running dataset %s", name)
-    config = VisDoMRAGConfig(
-        data_dir=data_dir,
-        output_dir=output_root / name,
-        csv_path=csv_path,
-    )
-    df = load_dataset(config)
-    retrieval = RetrievalManager(config=config, df=df)
-    run_pipeline(config, retrieval, qwen_model)
+    if retriever is None:
+        config = VisDoMRAGConfig(
+            data_dir=data_dir,
+            output_dir=output_root / name,
+            csv_path=csv_path,
+        )
+        df = load_dataset(config)
+        retriever = RetrievalManager(config=config, df=df)
+    config = retriever.config
+    run_pipeline(config, retriever, qwen)
     eval_dir = config.combined_output_dir
     stats = evaluate_json_dir(eval_dir)
     stats.update({"dataset": name, "eval_dir": str(eval_dir)})
     return stats
 
 
+def set_gpu(gpu_ids: Optional[str]) -> None:
+    if gpu_ids:
+        os.environ["CUDA_VISIBLE_DEVICES"] = gpu_ids
+    else:
+        os.environ.pop("CUDA_VISIBLE_DEVICES", None)
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="Run VisDoMRAG across datasets")
+    parser.add_argument(
+        "--phase",
+        choices=["all", "index", "pipeline"],
+        default="all",
+        help="Run both phases or only index/pipeline",
+    )
+    parser.add_argument(
+        "--index-gpu",
+        default=None,
+        help="GPU(s) for ColPali/ColQwen indexing (e.g., '1' or '1,2')",
+    )
+    parser.add_argument(
+        "--pipeline-gpu",
+        default=None,
+        help="GPU(s) for Qwen pipeline (e.g., '2,3')",
+    )
+    return parser.parse_args()
+
+
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     root = Path.cwd()
+    args = parse_args()
 
     datasets = {
         "feta_tab": {
             "data_dir": root / "feta_tab",
             "csv": None,
         },
-        # Add other datasets here
+        "paper_tab": {
+            "data_dir": root / "paper_tab",
+            "csv": None,
+        },
+        "scigraphvqa": {
+            "data_dir": root / "scigraphvqa",
+            "csv": None,
+        },
+        "slidevqa": {
+            "data_dir": root / "slidevqa",
+            "csv": None,
+        },
+        "spiqa": {
+            "data_dir": root / "spiqa",
+            "csv": None,
+        },
     }
 
-    qwen_model = init_qwen()
     output_root = root / "outputs"
 
-    summary: List[Dict] = []
-    for name, cfg in datasets.items():
-        stats = run_for_dataset(name, cfg["data_dir"], output_root, cfg.get("csv"))
-        summary.append(stats)
+    retrievers: Dict[str, RetrievalManager] = {}
+    if args.phase in {"all", "index"}:
+        set_gpu(args.index_gpu)
+        for name, cfg in tqdm(datasets.items(), desc="Indexing datasets"):
+            config = VisDoMRAGConfig(
+                data_dir=cfg["data_dir"],
+                output_dir=output_root / name,
+                csv_path=cfg.get("csv"),
+            )
+            df = load_dataset(config)
+            retrievers[name] = RetrievalManager(config=config, df=df)
 
-    summary_path = root / "run_all_summary.json"
-    with summary_path.open("w") as fh:
-        json.dump(summary, fh, indent=2)
-    logger.info("Saved summary to %s", summary_path)
+    summary: List[Dict] = []
+    if args.phase in {"all", "pipeline"}:
+        set_gpu(args.pipeline_gpu)
+        qwen_model = init_qwen()
+        for name, cfg in tqdm(datasets.items(), desc="Running pipelines"):
+            if args.phase == "pipeline" and name not in retrievers:
+                config = VisDoMRAGConfig(
+                    data_dir=cfg["data_dir"],
+                    output_dir=output_root / name,
+                    csv_path=cfg.get("csv"),
+                )
+                df = load_dataset(config)
+                retrievers[name] = RetrievalManager(config=config, df=df)
+            stats = run_for_dataset(
+                name,
+                cfg["data_dir"],
+                output_root,
+                cfg.get("csv"),
+                retriever=retrievers.get(name),
+                qwen=qwen_model,
+            )
+            summary.append(stats)
+
+    if summary:
+        summary_path = root / "run_all_summary.json"
+        with summary_path.open("w") as fh:
+            json.dump(summary, fh, indent=2)
+        logger.info("Saved summary to %s", summary_path)
