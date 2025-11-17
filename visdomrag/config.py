@@ -49,6 +49,10 @@ class VisDoMRAGConfig:
         return self.retrieval_dir / f"retrieval_{self.text_retriever}.csv"
 
     @property
+    def document_cache_file(self) -> Path:
+        return self.retrieval_dir / "document_cache.pkl"
+
+    @property
     def visual_output_dir(self) -> Path:
         return self.output_dir / f"{self.llm_model}_vision"
 

@@ -1,0 +1,21 @@
+# Byte-compiled / cache files
+__pycache__/
+*.py[cod]
+
+# Jupyter checkpoints
+.ipynb_checkpoints/
+
+# Logs
+*.log
+
+# Pipeline outputs and caches
+outputs/
+*/retrieval/
+*/visual_embeddings/
+
+# Raw data
+feta_tab/
+paper_tab/
+scigraphvqa/
+slidevqa/
+spiqa/

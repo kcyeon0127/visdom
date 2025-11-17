@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import logging
+import pickle
 import traceback
 import uuid
 from dataclasses import dataclass, field
@@ -147,6 +148,16 @@ class RetrievalManager:
         if self.document_cache:
             return self.document_cache
 
+        cache_path = self.config.document_cache_file
+        if cache_path.exists() and not self.config.force_reindex:
+            try:
+                with cache_path.open("rb") as fh:
+                    self.document_cache = pickle.load(fh)
+                logger.info("Loaded document cache from %s", cache_path)
+                return self.document_cache
+            except Exception:
+                logger.warning("Failed to load document cache. Rebuilding...")
+
         logger.info("Caching PDF contents")
         pdf_dir = self.config.data_dir / "docs"
         unique_docs = self._collect_unique_docs()
@@ -166,6 +177,13 @@ class RetrievalManager:
             else:
                 logger.warning("No PDF found for document %s", doc_id)
         logger.info("Cached %d documents", len(self.document_cache))
+        try:
+            cache_path.parent.mkdir(parents=True, exist_ok=True)
+            with cache_path.open("wb") as fh:
+                pickle.dump(self.document_cache, fh)
+            logger.info("Saved document cache to %s", cache_path)
+        except Exception:
+            logger.warning("Failed to save document cache to %s", cache_path)
         return self.document_cache
 
     def identify_document_and_page(
