@@ -35,10 +35,17 @@ python run_all_datasets.py --phase pipeline --pipeline-gpu 2,3
 ### 전처리만 선행 실행
 Qwen 추론 없이 문서 캐시/시각·텍스트 인덱스만 미리 만들고 싶다면 `run_preprocessing.py`를 사용합니다.
 ```bash
-python run_preprocessing.py --dataset feta_tab --gpu 1
+CUDA_VISIBLE_DEVICES=1 python run_preprocessing.py --dataset feta_tab
 # 캐시/인덱스를 다시 만들고 싶다면 --force 추가
 ```
 실행이 끝나면 `retrieval/document_cache.pkl`, `retrieval/retrieval_*.csv`, `visual_embeddings/*.pt`가 생성되어 나중에 Qwen 추론만 빠르게 수행할 수 있습니다.
+
+### 경량 Qwen 추론만 실행
+전처리 결과를 사용해 ColPali를 다시 로드하지 않고 Qwen만 실행하려면 `run_qwen_light.py`를 사용하세요.
+```bash
+CUDA_VISIBLE_DEVICES=2,3 python run_qwen_light.py --dataset feta_tab --resume
+```
+기본 설정으로 모든 q_id를 순회하며, 이미 생성된 JSON이 있으면 `--resume` 옵션으로 건너뜁니다. `--only q1,q2`로 특정 q_id만 선택할 수도 있습니다.
 
 ### 결과 평가
 노트북 대신 CLI로 평가하려면:

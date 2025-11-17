@@ -2,7 +2,7 @@
 
 Runs document caching + visual/text index building without Qwen inference.
 Usage:
-    python run_preprocessing.py --dataset feta_tab --gpu 1
+    python run_preprocessing.py --dataset feta_tab GPU_IDS 1
 """
 from __future__ import annotations
 
@@ -29,7 +29,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Precompute caches and indexes")
     parser.add_argument("--dataset", required=True, help="Dataset folder name (e.g., feta_tab)")
     parser.add_argument("--root", default=".", help="Project root (default: current directory)")
-    parser.add_argument("--gpu", default=None, help="GPU id(s) for ColPali/ColQwen")
+    parser.add_argument("GPU_IDS", default=None, help="GPU id(s) for ColPali/ColQwen")
     parser.add_argument("--force", action="store_true", help="Force rebuild caches/indexes")
     return parser.parse_args()
 
