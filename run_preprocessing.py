@@ -1,14 +1,13 @@
 """Document preprocessing helper.
 
 Runs document caching + visual/text index building without Qwen inference.
-Usage:
-    python run_preprocessing.py --dataset feta_tab GPU_IDS 1
+사용 예시:
+    CUDA_VISIBLE_DEVICES=1 python run_preprocessing.py --dataset feta_tab
 """
 from __future__ import annotations
 
 import argparse
 import logging
-import os
 from pathlib import Path
 
 from visdomrag import VisDoMRAGConfig, RetrievalManager, load_dataset
@@ -16,20 +15,10 @@ from visdomrag import VisDoMRAGConfig, RetrievalManager, load_dataset
 logger = logging.getLogger("preprocess")
 
 
-def set_gpu(gpu_ids: str | None) -> None:
-    if gpu_ids:
-        os.environ["CUDA_VISIBLE_DEVICES"] = gpu_ids
-        logger.info("Using GPU(s): %s", gpu_ids)
-    else:
-        os.environ.pop("CUDA_VISIBLE_DEVICES", None)
-        logger.info("Using default visible GPUs")
-
-
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Precompute caches and indexes")
     parser.add_argument("--dataset", required=True, help="Dataset folder name (e.g., feta_tab)")
     parser.add_argument("--root", default=".", help="Project root (default: current directory)")
-    parser.add_argument("GPU_IDS", default=None, help="GPU id(s) for ColPali/ColQwen")
     parser.add_argument("--force", action="store_true", help="Force rebuild caches/indexes")
     return parser.parse_args()
 
@@ -40,8 +29,6 @@ def main() -> None:
     root = Path(args.root).resolve()
     data_dir = root / args.dataset
     output_dir = root / "outputs" / f"{args.dataset}_preprocess"
-
-    set_gpu(args.gpu)
 
     config = VisDoMRAGConfig(
         data_dir=data_dir,
