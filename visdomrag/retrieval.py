@@ -206,6 +206,13 @@ class RetrievalManager:
         cfg = self.config
         logger.info("Building visual index using %s", cfg.vision_retriever)
 
+        if cfg.vision_retrieval_file.exists() and not cfg.force_reindex:
+            logger.info(
+                "Visual retrieval CSV already exists (%s); skipping rebuild",
+                cfg.vision_retrieval_file,
+            )
+            return True
+
         pdf_dir = cfg.data_dir / "docs"
         output_dir = cfg.data_dir / "visual_embeddings"
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -345,6 +352,13 @@ class RetrievalManager:
     def build_text_index(self) -> bool:
         cfg = self.config
         logger.info("Building text index using %s", cfg.text_retriever)
+
+        if cfg.text_retrieval_file.exists() and not cfg.force_reindex:
+            logger.info(
+                "Text retrieval CSV already exists (%s); skipping rebuild",
+                cfg.text_retrieval_file,
+            )
+            return True
 
         if not self.document_cache:
             self.cache_documents()
