@@ -315,7 +315,10 @@ class RetrievalManager:
 
         with open(cfg.vision_retrieval_file, 'w', newline='') as csvfile:
             writer = csv.DictWriter(
-                csvfile, fieldnames=['q_id', 'document_id', 'score', 'question']
+                csvfile,
+                fieldnames=['q_id', 'document_id', 'score', 'question'],
+                quoting=csv.QUOTE_MINIMAL,
+                escapechar='\\',
             )
             writer.writeheader()
             writer.writerows(results)
@@ -465,6 +468,8 @@ class RetrievalManager:
                     'rank',
                     'score',
                 ],
+                quoting=csv.QUOTE_MINIMAL,
+                escapechar='\\',
             )
             writer.writeheader()
             writer.writerows(results)
