@@ -23,6 +23,30 @@ from tqdm import tqdm
 from .config import VisDoMRAGConfig
 
 
+def _extract_tensor(output: object) -> torch.Tensor:
+    """Normalize outputs from ColPali/ColQwen into 2D tensors."""
+    if isinstance(output, torch.Tensor):
+        tensor = output
+    elif hasattr(output, "pooler_output") and output.pooler_output is not None:
+        tensor = output.pooler_output
+    elif hasattr(output, "last_hidden_state"):
+        tensor = output.last_hidden_state
+    elif isinstance(output, (tuple, list)) and output:
+        tensor = output[0]
+        if isinstance(tensor, (tuple, list)):
+            tensor = tensor[0]
+    else:
+        raise TypeError("Unsupported embedding output type")
+
+    if tensor.dim() == 3:  # (batch, seq, hidden)
+        tensor = tensor.mean(dim=1)
+    elif tensor.dim() > 3:
+        dims = tuple(range(1, tensor.dim() - 1))
+        if dims:
+            tensor = tensor.mean(dim=dims)
+    return tensor
+
+
 def _sanitize_size_fields(payload: object) -> bool:
     """Recursively remove unsupported size keys in processor configs."""
     changed = False
@@ -155,6 +179,7 @@ class RetrievalManager:
             logger.info("Using %s embeddings for text retrieval", self.text_model_name)
         else:
             raise ValueError(f"Unsupported text retriever: {cfg.text_retriever}")
+
 
     # ------------------------------------------------------------------
     # 문서 준비 단계
@@ -303,10 +328,11 @@ class RetrievalManager:
                         k: v.to(self.vision_model.device)
                         for k, v in processed_image.items()
                     }
-                    with torch.no_grad():
-                        embedding = self.vision_model(**processed_image)
-                    torch.save(embedding.cpu(), output_dir / f"{page_id}.pt")
-                    page_embeddings[page_id] = embedding.cpu()
+                with torch.no_grad():
+                    raw_embedding = self.vision_model(**processed_image)
+                embedding = _extract_tensor(raw_embedding).detach().cpu()
+                torch.save(embedding, output_dir / f"{page_id}.pt")
+                page_embeddings[page_id] = embedding
                 except Exception:
                     logger.exception(
                         "Error processing page %d of %s", page_idx, pdf_file
@@ -326,9 +352,10 @@ class RetrievalManager:
                     for k, v in processed_query.items()
                 }
                 with torch.no_grad():
-                    embedding = self.vision_model(**processed_query)
-                query_embeddings[q_id] = embedding.cpu()
-                torch.save(embedding.cpu(), output_dir / f"query_{q_id}.pt")
+                    raw_embedding = self.vision_model(**processed_query)
+                embedding = _extract_tensor(raw_embedding).detach().cpu()
+                query_embeddings[q_id] = embedding
+                torch.save(embedding, output_dir / f"query_{q_id}.pt")
             except Exception:
                 logger.exception("Error embedding query %s", q_id)
 
