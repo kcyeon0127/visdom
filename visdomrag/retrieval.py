@@ -23,6 +23,27 @@ from tqdm import tqdm
 from .config import VisDoMRAGConfig
 
 
+def _sanitize_size_fields(payload: object) -> bool:
+    """Recursively remove unsupported size keys in processor configs."""
+    changed = False
+
+    if isinstance(payload, dict):
+        if "size" in payload and isinstance(payload["size"], dict):
+            size = payload["size"]
+            for invalid in ("max_pixels", "min_pixels"):
+                if invalid in size:
+                    size.pop(invalid)
+                    changed = True
+        for value in payload.values():
+            if _sanitize_size_fields(value):
+                changed = True
+    elif isinstance(payload, list):
+        for item in payload:
+            if _sanitize_size_fields(item):
+                changed = True
+    return changed
+
+
 def _prepare_colqwen_assets(model_id: str) -> Path:
     """Ensure ColQwen2 processor config is compatible with current transformers."""
     try:
@@ -36,6 +57,7 @@ def _prepare_colqwen_assets(model_id: str) -> Path:
     preprocessor_candidates = [
         local_dir / "preprocessor_config.json",
         local_dir / "preprocessor.json",
+        local_dir / "video_preprocessor.json",
     ]
     updated = False
     for candidate in preprocessor_candidates:
@@ -43,25 +65,11 @@ def _prepare_colqwen_assets(model_id: str) -> Path:
             continue
         with candidate.open("r", encoding="utf-8") as fh:
             data = json.load(fh)
-        changed = False
-        for key in ("image_processor", "video_processor"):
-            section = data.get(key)
-            if not isinstance(section, dict):
-                continue
-            size = section.get("size")
-            if not isinstance(size, dict):
-                continue
-            removed = False
-            for invalid in ("max_pixels", "min_pixels"):
-                if invalid in size:
-                    size.pop(invalid)
-                    removed = True
-            if removed:
-                changed = True
-        if changed:
+        if _sanitize_size_fields(data):
             with candidate.open("w", encoding="utf-8") as fh:
                 json.dump(data, fh, ensure_ascii=False, indent=2)
             updated = True
+
     preprocessor_path = local_dir / "preprocessor.json"
     video_pre = local_dir / "video_preprocessor.json"
     if preprocessor_path.exists() and not video_pre.exists():
