@@ -328,11 +328,11 @@ class RetrievalManager:
                         k: v.to(self.vision_model.device)
                         for k, v in processed_image.items()
                     }
-                with torch.no_grad():
-                    raw_embedding = self.vision_model(**processed_image)
-                embedding = _extract_tensor(raw_embedding).detach().cpu()
-                torch.save(embedding, output_dir / f"{page_id}.pt")
-                page_embeddings[page_id] = embedding
+                    with torch.no_grad():
+                        raw_embedding = self.vision_model(**processed_image)
+                    embedding = _extract_tensor(raw_embedding).detach().cpu()
+                    torch.save(embedding, output_dir / f"{page_id}.pt")
+                    page_embeddings[page_id] = embedding
                 except Exception:
                     logger.exception(
                         "Error processing page %d of %s", page_idx, pdf_file
