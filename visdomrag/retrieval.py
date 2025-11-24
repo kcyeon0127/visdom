@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import csv
+import json
 import logging
 import pickle
+import shutil
 import traceback
 import uuid
 from dataclasses import dataclass, field
@@ -19,6 +21,55 @@ from PyPDF2 import PdfReader
 from tqdm import tqdm
 
 from .config import VisDoMRAGConfig
+
+
+def _prepare_colqwen_assets(model_id: str) -> Path:
+    """Ensure ColQwen2 processor config is compatible with current transformers."""
+    try:
+        from huggingface_hub import snapshot_download
+    except ImportError as exc:  # pragma: no cover - optional dependency
+        raise ImportError(
+            "huggingface_hub is required to download ColQwen2 checkpoints."
+        ) from exc
+
+    local_dir = Path(snapshot_download(model_id))
+    preprocessor_candidates = [
+        local_dir / "preprocessor_config.json",
+        local_dir / "preprocessor.json",
+    ]
+    updated = False
+    for candidate in preprocessor_candidates:
+        if not candidate.exists():
+            continue
+        with candidate.open("r", encoding="utf-8") as fh:
+            data = json.load(fh)
+        changed = False
+        for key in ("image_processor", "video_processor"):
+            section = data.get(key)
+            if not isinstance(section, dict):
+                continue
+            size = section.get("size")
+            if not isinstance(size, dict):
+                continue
+            removed = False
+            for invalid in ("max_pixels", "min_pixels"):
+                if invalid in size:
+                    size.pop(invalid)
+                    removed = True
+            if removed:
+                changed = True
+        if changed:
+            with candidate.open("w", encoding="utf-8") as fh:
+                json.dump(data, fh, ensure_ascii=False, indent=2)
+            updated = True
+    preprocessor_path = local_dir / "preprocessor.json"
+    video_pre = local_dir / "video_preprocessor.json"
+    if preprocessor_path.exists() and not video_pre.exists():
+        shutil.copy(preprocessor_path, video_pre)
+        updated = True
+    if updated:
+        logger.info("Patched ColQwen2 preprocessor config for compatibility")
+    return local_dir
 
 logger = logging.getLogger(__name__)
 
@@ -56,24 +107,23 @@ class RetrievalManager:
 
         if cfg.vision_retriever == "colpali":
             logger.info("Loading ColPali model for visual indexing on CUDA")
+            model_id = "vidore/colpali-v1.2"
             self.vision_model = ColPali.from_pretrained(
-                "vidore/colpali-v1.2",
+                model_id,
                 torch_dtype=torch.bfloat16,
                 device_map="cuda",
             ).eval()
-            self.vision_processor = ColPaliProcessor.from_pretrained(
-                "vidore/colpali-v1.2"
-            )
+            self.vision_processor = ColPaliProcessor.from_pretrained(model_id)
         else:
             logger.info("Loading ColQwen model for visual indexing on CUDA")
+            model_id = "vidore/colqwen2-v0.1"
+            local_dir = _prepare_colqwen_assets(model_id)
             self.vision_model = ColQwen2.from_pretrained(
-                "vidore/colqwen2-v0.1",
+                local_dir,
                 torch_dtype=torch.bfloat16,
                 device_map="cuda",
             ).eval()
-            self.vision_processor = ColQwen2Processor.from_pretrained(
-                "vidore/colqwen2-v0.1"
-            )
+            self.vision_processor = ColQwen2Processor.from_pretrained(local_dir)
 
         if cfg.text_retriever == "bm25":
             logger.info("Using BM25 for text retrieval")
