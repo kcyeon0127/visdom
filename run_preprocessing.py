@@ -20,6 +20,24 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--dataset", required=True, help="Dataset folder name (e.g., feta_tab)")
     parser.add_argument("--root", default=".", help="Project root (default: current directory)")
     parser.add_argument("--force", action="store_true", help="Force rebuild caches/indexes")
+    parser.add_argument(
+        "--vision-retriever",
+        choices=["colpali", "colqwen"],
+        default="colpali",
+        help="Visual retriever to cache (default: colpali)",
+    )
+    parser.add_argument(
+        "--text-retriever",
+        choices=["bm25", "minilm", "mpnet", "bge"],
+        default="bm25",
+        help="Text retriever to cache (default: bm25)",
+    )
+    parser.add_argument(
+        "--top-k",
+        type=int,
+        default=5,
+        help="Top-k to store for retrieval CSVs (default: 5).",
+    )
     return parser.parse_args()
 
 
@@ -35,6 +53,9 @@ def main() -> None:
         output_dir=output_dir,
         csv_path=None,
         force_reindex=args.force,
+        vision_retriever=args.vision_retriever,
+        text_retriever=args.text_retriever,
+        top_k=args.top_k,
     )
     df = load_dataset(config)
     retrieval = RetrievalManager(config=config, df=df)
