@@ -14,6 +14,7 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 import pandas as pd
 import torch
+import torch.nn.functional as F
 from difflib import SequenceMatcher
 from pdf2image import convert_from_path
 import pytesseract
@@ -24,7 +25,7 @@ from .config import VisDoMRAGConfig
 
 
 def _extract_tensor(output: object) -> torch.Tensor:
-    """Normalize outputs from ColPali/ColQwen into 2D tensors."""
+    """Normalize outputs from ColPali/ColQwen into (batch, seq, hidden) tensors."""
     if isinstance(output, torch.Tensor):
         tensor = output
     elif hasattr(output, "pooler_output") and output.pooler_output is not None:
@@ -38,12 +39,17 @@ def _extract_tensor(output: object) -> torch.Tensor:
     else:
         raise TypeError("Unsupported embedding output type")
 
-    if tensor.dim() == 3:  # (batch, seq, hidden)
-        tensor = tensor.mean(dim=1)
-    elif tensor.dim() > 3:
-        dims = tuple(range(1, tensor.dim() - 1))
-        if dims:
-            tensor = tensor.mean(dim=dims)
+    if tensor.dim() >= 3:
+        batch = tensor.shape[0]
+        hidden = tensor.shape[-1]
+        mid = int(np.prod(tensor.shape[1:-1])) if tensor.dim() > 3 else tensor.shape[1]
+        tensor = tensor.reshape(batch, mid, hidden)
+    elif tensor.dim() == 2:
+        tensor = tensor.unsqueeze(1)
+    elif tensor.dim() == 1:
+        tensor = tensor.view(1, 1, -1)
+    else:
+        tensor = tensor.reshape(1, 1, -1)
     return tensor
 
 
@@ -380,8 +386,17 @@ class RetrievalManager:
                 )
                 continue
 
+            tensors = list(relevant_page_embeddings.values())
+            max_seq = max(tensor.shape[1] for tensor in tensors)
+            padded_pages: List[torch.Tensor] = []
+            for tensor in tensors:
+                if tensor.shape[1] < max_seq:
+                    pad_amount = max_seq - tensor.shape[1]
+                    tensor = F.pad(tensor, (0, 0, 0, pad_amount, 0, 0))
+                padded_pages.append(tensor)
+
             qs = query_emb
-            ds = torch.cat(list(relevant_page_embeddings.values()), dim=0)
+            ds = torch.cat(padded_pages, dim=0)
             scores = self.vision_processor.score_multi_vector(qs, ds)
             scores = scores.flatten().numpy()
 
